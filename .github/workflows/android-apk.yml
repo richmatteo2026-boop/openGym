@@ -1,6 +1,11 @@
 # Builds this fork's Android APK (sideload flavour, 180 px animations from catalogue/media),
-# signs it with the fork's own key and, on a v* tag, publishes it as a GitHub release with its
+# signs it with the fork's own key and publishes it as the GitHub release v<version> with its
 # .sha256 beside it: the in-app updater of this build reads exactly that release (VITE_UPDATE_REPO).
+#
+# When it runs: a push to main that touches the app builds and releases only if
+# frontend/package.json carries a version with no release yet, so bumping the version is what
+# ships an update. A manual run (Actions -> Android APK -> Run workflow) always builds and
+# replaces the current version's APK. A pushed v* tag works too.
 #
 # Secrets (Settings -> Secrets and variables -> Actions):
 #   ANDROID_KEYSTORE_B64      base64 of the .jks keystore. KEEP THE ORIGINAL: every update must
@@ -9,14 +14,18 @@
 #   ANDROID_KEY_ALIAS         key alias (optional, defaults to opengym)
 # Variable (optional): ANDROID_APP_ID, defaults to com.matteoferron.opengym.
 #
-# Run it by hand (Actions -> Android APK -> Run workflow) for a downloadable artifact, or push a
-# tag (git tag v1.4.2 && git push --tags) for a release.
 name: Android APK
 
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['v*']
+    paths:
+      - 'frontend/**'
+      - 'scripts/catalogue/**'
+      - 'catalogue/media/**'
+      - '.github/workflows/android-apk.yml'
 
 permissions:
   contents: write
@@ -36,34 +45,55 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Is this version released yet?
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="$(node -p "require('./frontend/package.json').version")"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF" = refs/heads/main ] && gh release view "v$VER" >/dev/null 2>&1; then
+            echo "v$VER is already released; bump frontend/package.json to ship an update."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v7
+        if: steps.gate.outputs.build == 'true'
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - uses: actions/setup-java@v6
+        if: steps.gate.outputs.build == 'true'
         with:
           distribution: temurin
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
+        if: steps.gate.outputs.build == 'true'
 
       - name: Test the training logic
+        if: steps.gate.outputs.build == 'true'
         working-directory: frontend
         run: |
           npm ci
           npx vitest run src/lib
 
       - name: Mobile web bundle
+        if: steps.gate.outputs.build == 'true'
         working-directory: frontend
         run: npm run build:mobile
 
       - name: Gradle build
+        if: steps.gate.outputs.build == 'true'
         working-directory: frontend/android
         run: ./gradlew --no-daemon assembleSideloadRelease -PappId="$APP_ID"
 
       - name: Sign
+        if: steps.gate.outputs.build == 'true'
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -75,8 +105,6 @@ jobs:
             exit 1
           fi
           ANDROID_KEY_ALIAS="${ANDROID_KEY_ALIAS:-opengym}"
-          VER="$(node -p "require('./frontend/package.json').version")"
-          echo "VER=$VER" >> "$GITHUB_ENV"
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
           UNSIGNED=frontend/android/app/build/outputs/apk/sideload/release/app-sideload-release-unsigned.apk
           echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
@@ -90,6 +118,7 @@ jobs:
           ls -la openGym-*
 
       - uses: actions/upload-artifact@v7
+        if: steps.gate.outputs.build == 'true'
         with:
           name: openGym-${{ env.VER }}-apk
           path: |
@@ -98,11 +127,15 @@ jobs:
           retention-days: 30
 
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.gate.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" openGym-*.apk openGym-*.apk.sha256 \
-            --title "openGym $GITHUB_REF_NAME" \
-            --notes "Fork build: Lyfta import, MCP over HTTPS, matcher fixes. Signed with this fork's key." \
-            || gh release upload "$GITHUB_REF_NAME" openGym-*.apk openGym-*.apk.sha256 --clobber
+          TAG="v$VER"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" openGym-*.apk openGym-*.apk.sha256 --clobber
+          else
+            gh release create "$TAG" openGym-*.apk openGym-*.apk.sha256 --target "$GITHUB_SHA" \
+              --title "openGym $TAG" \
+              --notes "Fork build: Lyfta import, MCP over HTTPS, matcher fixes. Signed with this fork's key, so it installs and updates only over this fork's APK."
+          fi
