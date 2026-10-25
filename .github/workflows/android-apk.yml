@@ -40,8 +40,6 @@ jobs:
     timeout-minutes: 45
     env:
       APP_ID: ${{ vars.ANDROID_APP_ID || 'com.matteoferron.opengym' }}
-      VITE_UPDATE_REPO: ${{ github.repository }}
-      VITE_APK_VARIANT: standard
     steps:
       - uses: actions/checkout@v7
 
@@ -85,6 +83,10 @@ jobs:
       - name: Mobile web bundle
         if: steps.gate.outputs.build == 'true'
         working-directory: frontend
+        # Here and not job-wide: the tests pin the upstream default and must not see these.
+        env:
+          VITE_UPDATE_REPO: ${{ github.repository }}
+          VITE_APK_VARIANT: standard
         run: npm run build:mobile
 
       - name: Gradle build
