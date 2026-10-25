@@ -34,20 +34,20 @@ jobs:
       VITE_UPDATE_REPO: ${{ github.repository }}
       VITE_APK_VARIANT: standard
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: Test the training logic
         working-directory: frontend
@@ -89,7 +89,7 @@ jobs:
           sha256sum "openGym-$VER.apk" > "openGym-$VER.apk.sha256"
           ls -la openGym-*
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: openGym-${{ env.VER }}-apk
           path: |
