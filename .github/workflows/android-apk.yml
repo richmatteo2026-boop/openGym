@@ -6,7 +6,7 @@
 #   ANDROID_KEYSTORE_B64      base64 of the .jks keystore. KEEP THE ORIGINAL: every update must
 #                             be signed with the same key or Android refuses to install it.
 #   ANDROID_KEYSTORE_PASSWORD keystore and key password
-#   ANDROID_KEY_ALIAS         key alias
+#   ANDROID_KEY_ALIAS         key alias (optional, defaults to opengym)
 # Variable (optional): ANDROID_APP_ID, defaults to com.matteoferron.opengym.
 #
 # Run it by hand (Actions -> Android APK -> Run workflow) for a downloadable artifact, or push a
@@ -74,6 +74,7 @@ jobs:
             echo "::error::ANDROID_KEYSTORE_B64 is not set: an unsigned APK cannot be installed."
             exit 1
           fi
+          ANDROID_KEY_ALIAS="${ANDROID_KEY_ALIAS:-opengym}"
           VER="$(node -p "require('./frontend/package.json').version")"
           echo "VER=$VER" >> "$GITHUB_ENV"
           BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
