@@ -65,3 +65,23 @@ services:
       # The largest photo or video upload nginx passes to the API. Keep it above
       # MEDIA_VIDEO_MAX_MB (40 by default), which the api service reads from .env.
       - MEDIA_UPLOAD_MAX=${MEDIA_UPLOAD_MAX:-48m}
+
+  # Optional, off by default: the read-only MCP server over HTTPS, so claude.ai (web, desktop,
+  # phone) can read this profile as a custom connector. Start it with
+  #     docker compose --profile mcp up -d --build mcp
+  # It needs OPENGYM_MCP_TOKEN in .env (openssl rand -hex 32) and refuses to start without one.
+  # Put it behind the same HTTPS tunnel or proxy as the app; see mcp/README.md.
+  mcp:
+    profiles: ["mcp"]
+    build:
+      context: .
+      dockerfile: mcp/Dockerfile
+    restart: unless-stopped
+    environment:
+      - OPENGYM_MCP_TOKEN=${OPENGYM_MCP_TOKEN:-}
+      - OPENGYM_UID=${OPENGYM_UID:-}
+      - MCP_PORT=3001
+    volumes:
+      - ./data:/data:ro      # read-only: the server never writes the data it answers from
+    ports:
+      - "${MCP_HOST_PORT:-127.0.0.1:8090}:3001"

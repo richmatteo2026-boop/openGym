@@ -135,6 +135,10 @@ export function detectSource(header) {
 // "barbell snatch". Strip the parentheses, expand the shorthand, then compare as a
 // sorted bag of words so word order stops mattering.
 const SYN = [
+  // A V-bar is an attachment, and its "v" would otherwise be dropped as the FILLER of a "v. 2"
+  // variant, leaving "bar": "Cable Lateral Pulldown with V-bar" then matched the straight-bar
+  // pulldown exactly, while the dataset has the V-bar one under its own name.
+  [/\bv bar\b/g, 'vbar'],
   [/\bbb\b/g, 'barbell'], [/\bdb\b/g, 'dumbbell'], [/\bkb\b/g, 'kettlebell'],
   [/\bohp\b/g, 'overhead press'], [/\bbw\b/g, 'body weight'], [/\bbodyweight\b/g, 'body weight'],
   // 'smith machine' first: the generic machine->lever rule would otherwise eat the word
@@ -301,6 +305,9 @@ const NAME_BP = [
   [/\b(romanian|rdl|stiff leg|stiff legged|straight leg)\b.*\bdeadlifts?\b|\brdl\b/, 'upper legs'],
   [/\b(curl|curls|bicep|biceps|tricep|triceps|skullcrusher|pushdown)\b/, 'upper arms'],
   [/\bchest supported\b/, 'back'],   // where the chest rests, not what it trains
+  // A reverse fly is a rear-delt movement that happens to say "fly" (and often "pec"): read as
+  // chest, every set of it went to the wrong side of the body in the muscle map.
+  [/\b(reverse (pec )?(fly|flye|flyes|flies)|rear delt|rear delts)\b/, 'shoulders'],
   [/\b(bench|chest|pec|fly|flye|crossover|crossovers|dip)\b/, 'chest'],
   [/\b(row|rows|pulldown|pullup|pull up|chin up|lat|lats|back|deadlift|deadlifts|shrug)\b/, 'back'],
   [/\b(shoulder|delt|delts|overhead|lateral raise|front raise|face pull|press up)\b/, 'shoulders'],

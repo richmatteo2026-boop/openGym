@@ -47,3 +47,12 @@ describe('body part from an exercise name', () => {
     expect(bp('Something Unheard Of')).toBe(null)
   })
 })
+
+describe('reverse fly', () => {
+  it('is a rear-delt movement, not a chest one', () => {
+    expect(bp('Reverse Pec Fly Unilaterale')).toBe('shoulders')
+    expect(bp('Reverse Fly (Machine)')).toBe('shoulders')
+    expect(bp('Rear Delt Fly')).toBe('shoulders')
+    expect(bp('Pec Deck Fly')).toBe('chest')   // unchanged
+  })
+})

@@ -62,6 +62,32 @@ Add the server to your LLM client's MCP config. For Claude Desktop, edit
 For Cursor and other MCP-compatible clients, see the client's MCP docs — the same `command` +
 `args` + `env` shape is what every stdio MCP server expects.
 
+### Or: over HTTPS, for claude.ai and the Claude phone apps
+
+A client that cannot spawn a local process (a custom connector in claude.ai, which also
+reaches the desktop and mobile apps) talks to `src/http.js` instead: the same nine tools over
+Streamable HTTP, stateless, read-only, with `./data` mounted read-only.
+
+1. Add a token to `.env`; the server refuses to start without one (32+ characters):
+   ```bash
+   echo "OPENGYM_MCP_TOKEN=$(openssl rand -hex 32)" >> .env
+   ```
+2. Start it next to the app. It listens on `127.0.0.1:8090` on the host (`MCP_HOST_PORT`):
+   ```bash
+   docker compose --profile mcp up -d --build mcp
+   ```
+   Without Docker: `OPENGYM_DATA=./data OPENGYM_MCP_TOKEN=… node mcp/src/http.js` (port `MCP_PORT`, default 3001).
+3. Give it an HTTPS hostname with the same tunnel or proxy as the app, e.g. a second Cloudflare
+   Tunnel public hostname `gym-mcp.example.com` → `http://localhost:8090`.
+4. In claude.ai: **Settings → Connectors → Add custom connector**, URL
+   `https://gym-mcp.example.com/mcp/<your token>`, no OAuth.
+
+The token in the URL is the whole of the auth, so treat the URL like a password: anyone with it
+can read the profile's workouts and weigh-ins (nothing can be written). To revoke it, change
+`OPENGYM_MCP_TOKEN` and restart the service. Clients that can send headers may use
+`POST /mcp` with `Authorization: Bearer <token>` instead. `GET /healthz` answers `{"ok":true}`
+without a token and reveals nothing else.
+
 Restart the client; you should see the openGym tools appear with "serving profile \<name\>" on
 the server's stderr.
 
@@ -137,8 +163,9 @@ their own 92 tests in `frontend/src/lib/*.test.js`.
   admin dashboard (new `./data/tokens.json`) and a write-lock against the web UI's read-modify-
   write of `state-<uid>.json`. Tools: `log_workout`, `add_bodyweight`, `edit_routine`,
   `assign_weekday`, `override_day`.
-- **Phase 3:** Streamable HTTP transport, opt-in 4th container in `docker-compose.yml`. Same
-  tool implementations, second transport — the MCP SDK supports both behind one tool registration.
+- **Done (Phase 3, read-only part):** Streamable HTTP transport (`src/http.js`), opt-in `mcp`
+  service in `docker-compose.yml` behind `--profile mcp`, token auth. Same tool registration as
+  stdio (`src/server.js`). Write tools over HTTP wait on Phase 2's write-lock.
 
 ## License
 

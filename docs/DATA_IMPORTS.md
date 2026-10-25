@@ -46,6 +46,25 @@ With **Hevy Pro** you can skip the CSV:
 
 Routines always arrive as new plans; nothing you already have is overwritten.
 
+## Lyfta
+
+Lyfta's own CSV export has no published format, so the route that is verified end to end goes
+through Lyfta's read-only MCP connector: an assistant connected to Lyfta reads the workouts
+(`get_recent_workouts`, then `get_workout` for each id) and saves them as one JSON array, and
+`scripts/lyfta-to-csv.mjs` turns that into a CSV for **Import from another app**:
+
+```bash
+node scripts/lyfta-to-csv.mjs lyfta-workouts.json --out lyfta.csv --tz Europe/Rome
+```
+
+Lyfta stores times in UTC and records no set types, so the script moves each session to your
+time zone and marks warm-ups by a fixed rule: the leading sets of an exercise under 70 % of its
+heaviest set, never on dips or pull-ups, never on a set you rated. A set logged without a weight
+takes the one before it, with a note on the exercise. Every such decision is printed before you
+import. Exercises you created in Lyfta under your own name can be pointed at the library with
+`--names names.json` (`{"Pushdown Ai Cavi Unilaterale": "cable one arm tricep pushdown"}`);
+anything left unmatched becomes one of your own exercises, as with any other app.
+
 ## Body weight from Apple Health
 
 In the Health app on your iPhone, tap your profile picture, then **Export All Health Data**. Unzip

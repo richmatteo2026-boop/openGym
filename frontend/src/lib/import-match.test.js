@@ -143,3 +143,15 @@ describe('Hevy CSV uses the generated title map', () => {
     expect(pull.sets[1]).toMatchObject({ w: 52, r: 12, rpe: 8 })
   })
 })
+
+// Lyfta writes the attachment into the name. The "v" of "V-bar" used to be dropped as the
+// filler of a "v. 2" variant, so the V-bar pulldown matched the straight-bar one exactly.
+describe('V-bar attachments', () => {
+  it('keeps a V-bar pulldown off the straight-bar entry', () => {
+    expect(matchExercise('Cable Lateral Pulldown with V-bar')).toBe('2616')
+    expect(matchExercise('Cable Bar Lateral Pulldown')).toBe('0150')
+  })
+  it('still reads the "v. 2" of a variant as filler', () => {
+    expect(matchExercise('Cable One Arm Biceps Curl v. 2')).toBe('2656')
+  })
+})
