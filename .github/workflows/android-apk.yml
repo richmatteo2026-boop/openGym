@@ -1,0 +1,107 @@
+# Builds this fork's Android APK (sideload flavour, 180 px animations from catalogue/media),
+# signs it with the fork's own key and, on a v* tag, publishes it as a GitHub release with its
+# .sha256 beside it: the in-app updater of this build reads exactly that release (VITE_UPDATE_REPO).
+#
+# Secrets (Settings -> Secrets and variables -> Actions):
+#   ANDROID_KEYSTORE_B64      base64 of the .jks keystore. KEEP THE ORIGINAL: every update must
+#                             be signed with the same key or Android refuses to install it.
+#   ANDROID_KEYSTORE_PASSWORD keystore and key password
+#   ANDROID_KEY_ALIAS         key alias
+# Variable (optional): ANDROID_APP_ID, defaults to com.matteoferron.opengym.
+#
+# Run it by hand (Actions -> Android APK -> Run workflow) for a downloadable artifact, or push a
+# tag (git tag v1.4.2 && git push --tags) for a release.
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      APP_ID: ${{ vars.ANDROID_APP_ID || 'com.matteoferron.opengym' }}
+      VITE_UPDATE_REPO: ${{ github.repository }}
+      VITE_APK_VARIANT: standard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test the training logic
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vitest run src/lib
+
+      - name: Mobile web bundle
+        working-directory: frontend
+        run: npm run build:mobile
+
+      - name: Gradle build
+        working-directory: frontend/android
+        run: ./gradlew --no-daemon assembleSideloadRelease -PappId="$APP_ID"
+
+      - name: Sign
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -eu
+          if [ -z "$KS_B64" ]; then
+            echo "::error::ANDROID_KEYSTORE_B64 is not set: an unsigned APK cannot be installed."
+            exit 1
+          fi
+          VER="$(node -p "require('./frontend/package.json').version")"
+          echo "VER=$VER" >> "$GITHUB_ENV"
+          BT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          UNSIGNED=frontend/android/app/build/outputs/apk/sideload/release/app-sideload-release-unsigned.apk
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/ks.jks"
+          "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/ks.jks" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --ks-key-alias "$ANDROID_KEY_ALIAS" --out "openGym-$VER.apk" "$RUNNER_TEMP/aligned.apk"
+          rm -f "$RUNNER_TEMP/ks.jks"
+          "$BT/apksigner" verify --print-certs "openGym-$VER.apk"
+          sha256sum "openGym-$VER.apk" > "openGym-$VER.apk.sha256"
+          ls -la openGym-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openGym-${{ env.VER }}-apk
+          path: |
+            openGym-*.apk
+            openGym-*.apk.sha256
+          retention-days: 30
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" openGym-*.apk openGym-*.apk.sha256 \
+            --title "openGym $GITHUB_REF_NAME" \
+            --notes "Fork build: Lyfta import, MCP over HTTPS, matcher fixes. Signed with this fork's key." \
+            || gh release upload "$GITHUB_REF_NAME" openGym-*.apk openGym-*.apk.sha256 --clobber

@@ -12,7 +12,12 @@
 import { MOBILE } from './mobile.js'
 import { BUILTIN_PX } from './anim-quality.js'
 
-const REPO = 'DuarteSantos8/openGym'
+// A fork that publishes its own APKs (signed with its own key) sets VITE_UPDATE_REPO at build
+// time, so its phones are offered the fork's releases: the upstream APK carries another key and
+// Android would refuse it over the fork's install anyway.
+const REPO = /^[\w.-]+\/[\w.-]+$/.test((import.meta.env || {}).VITE_UPDATE_REPO || '')
+  ? import.meta.env.VITE_UPDATE_REPO
+  : 'DuarteSantos8/openGym'
 const LATEST_URL = `https://api.github.com/repos/${REPO}/releases/latest`
 export const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`
 

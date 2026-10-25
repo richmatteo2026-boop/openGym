@@ -7,7 +7,9 @@ android {
         buildConfig = true
     }
     defaultConfig {
-        applicationId "ch.duartesantos.opengym"
+        // A fork signing its own APKs passes -PappId=… so its app installs beside the upstream
+        // one instead of colliding with it (same id, other key: Android refuses the install).
+        applicationId (project.findProperty('appId') ?: "ch.duartesantos.opengym")
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 27

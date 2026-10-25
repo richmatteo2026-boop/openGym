@@ -315,3 +315,17 @@ describe('pickApk: Standard, Plus and HD', () => {
     expect(pickApk(['openGym-1.4.3.apk', 'openGym-HD-1.4.3.apk'].map(a), 'plus').apk).toBe(null)
   })
 })
+
+describe('update source for a fork', () => {
+  it('asks the fork named at build time for releases, else upstream', async () => {
+    const { vi: v } = await import('vitest')
+    v.resetModules()
+    v.stubEnv('VITE_UPDATE_REPO', 'someone/openGym')
+    expect((await import('./update.js')).RELEASES_PAGE).toBe('https://github.com/someone/openGym/releases/latest')
+    v.resetModules()
+    v.stubEnv('VITE_UPDATE_REPO', 'not a repo; rm -rf')
+    expect((await import('./update.js')).RELEASES_PAGE).toBe('https://github.com/DuarteSantos8/openGym/releases/latest')
+    v.unstubAllEnvs()
+    v.resetModules()
+  })
+})
